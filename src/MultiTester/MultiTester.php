@@ -14,7 +14,12 @@ use MultiTester\Traits\WorkingDirectory;
 
 class MultiTester
 {
-    use WorkingDirectory, MultiTesterFile, TravisFile, StorageDirectory, ProcStreams, Verbose;
+    use WorkingDirectory;
+    use MultiTesterFile;
+    use TravisFile;
+    use StorageDirectory;
+    use ProcStreams;
+    use Verbose;
 
     /**
      * @var array|File Composer package settings cache.

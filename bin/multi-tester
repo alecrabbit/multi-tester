@@ -2,11 +2,9 @@
 <?php
 
 use MultiTester\Color;
-use MultiTester\Exceptions\ConfigFileNotFoundException;
 use MultiTester\Exceptions\MultiTesterException;
 use MultiTester\Exceptions\ZeroProjectsTestedException;
 use MultiTester\MultiTester;
-use MultiTester\Summary;
 
 set_time_limit(-1);
 
@@ -68,7 +66,7 @@ try {
     showError($e);
     if (isset($multiTester) && $multiTester->isVerbose()) {
 
-        echo ' Check you have projects in your config file: ' . $multiTester->getMultiTesterFile(). "\n\n";
+        echo ' Check you have projects in your config file: ' . $multiTester->getMultiTesterFile() . "\n\n";
 
         echo "Trace:\n";
         echo $e->getTraceAsString() . "\n\n";
@@ -76,8 +74,7 @@ try {
         echo ' Use --verbose option to get more details.' . "\n\n";
     }
     exit(1);
-}
-catch (MultiTesterException $e) {
+} catch (MultiTesterException $e) {
     showError($e);
     if (isset($multiTester) && $multiTester->isVerbose()) {
         echo "Trace:\n";
