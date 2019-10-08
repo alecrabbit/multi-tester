@@ -81,6 +81,19 @@ class Project
         return $this->exec();
     }
 
+    public function removeReplacedPackages()
+    {
+        if (!isset($this->config->data['replace'])) {
+            return;
+        }
+
+        $replace = (array) $this->config->data['replace'];
+
+        foreach ($replace as $package => $version) {
+            (new Directory('vendor/' . $package))->remove();
+        }
+    }
+
     protected function getScript($script)
     {
         $script = is_array($script) ? $script : [$script];
@@ -210,10 +223,10 @@ class Project
         if (!isset($settings['clone'])) {
             $this->seedSourceSetting($settings);
             $this->checkSourceSetting($settings);
-            $settings['clone'] = ['git clone ' . $settings['source']['url'] . ' .'];
+            $settings['clone'] = ['git clone ' . $settings['source']['url'] . ' .' . ($this->config->quiet ? ' --quiet' : '')];
 
             if (isset($settings['source']['reference'])) {
-                $settings['clone'][] = 'git checkout ' . $settings['source']['reference'];
+                $settings['clone'][] = 'git checkout ' . $settings['source']['reference'] . ($this->config->quiet ? ' --quiet' : '');
             }
         }
 
@@ -249,9 +262,27 @@ class Project
     /**
      * @param array $settings
      */
+    protected function seedAutoloadSetting(&$settings)
+    {
+        $this->seedSetting(
+            $settings,
+            'autoload',
+            'autoload build script',
+            'composer dump-autoload --optimize --no-interaction' . ($this->config->quiet ? ' --quiet' : '')
+        );
+    }
+
+    /**
+     * @param array $settings
+     */
     protected function seedInstallSetting(&$settings)
     {
-        $this->seedSetting($settings, 'install', 'install script', 'composer install --no-interaction');
+        $this->seedSetting(
+            $settings,
+            'install',
+            'install script',
+            'composer install --no-interaction' . ($this->config->quiet ? ' --quiet' : '')
+        );
     }
 
     /**
@@ -259,7 +290,12 @@ class Project
      */
     protected function seedScriptSetting(&$settings)
     {
-        $this->seedSetting($settings, 'script', 'script', 'vendor/bin/phpunit --no-coverage');
+        $this->seedSetting(
+            $settings,
+            'script',
+            'script',
+            'vendor/bin/phpunit --no-coverage'
+        );
     }
 
     /**
@@ -269,16 +305,19 @@ class Project
     {
         $settings = $this->getSettings();
         $package = $this->getPackage();
-        $tester = $this->getConfig()->getTester();
+        $config = $this->getConfig();
+        $tester = $config->getTester();
 
         $this->seedCloneSetting($settings);
 
         (new Directory('.'))->clean();
-        $tester->info("empty current directory\n");
 
-        $tester->framedInfo("Cloning $package");
+        if (!$config->quiet) {
+            $tester->info("empty current directory\n");
+            $tester->framedInfo("Cloning $package");
+        }
 
-        if (!$tester->exec($settings['clone'])) {
+        if (!$tester->exec($settings['clone'], $config->quiet)) {
             throw new MultiTesterException("Cloning $package failed.");
         }
     }
@@ -293,20 +332,42 @@ class Project
         $config = $this->getConfig();
         $tester = $config->getTester();
 
-        $tester->info("clear travis cache.\n");
+        if (!$config->quiet) {
+            $tester->info("clear travis cache.\n");
+        }
+
         $tester->clearTravisSettingsCache();
 
         $this->seedInstallSetting($settings);
 
-        $tester->framedInfo("Installing $package");
+        if (!$config->quiet) {
+            $tester->framedInfo("Installing $package");
+        }
 
-        if (!$tester->exec($settings['install'])) {
+        if (!$tester->exec($settings['install'], $config->quiet)) {
             throw new MultiTesterException("Installing $package failed.");
         }
     }
 
     /**
-     * @throws TestFailedException
+     * @throws MultiTesterException
+     */
+    protected function autoload()
+    {
+        $settings = $this->getSettings();
+        $package = $this->getPackage();
+        $config = $this->getConfig();
+        $tester = $config->getTester();
+
+        $this->seedAutoloadSetting($settings);
+
+        if (!$tester->exec($settings['autoload'], $config->quiet)) {
+            throw new MultiTesterException("Building autoloader of $package failed.");
+        }
+    }
+
+    /**
+     * @throws MultiTesterException|TestFailedException
      *
      * @return bool
      */
@@ -317,7 +378,11 @@ class Project
         $config = $this->getConfig();
         $tester = $config->getTester();
 
+        $this->removeReplacedPackages();
+
         (new Directory($config->projectDirectory))->copy('vendor/' . $config->packageName, ['.git', 'vendor']);
+
+        $this->autoload();
 
         $this->seedScriptSetting($settings);
 

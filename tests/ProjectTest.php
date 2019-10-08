@@ -237,9 +237,10 @@ class ProjectTest extends TestCase
         $exit1 = 'php ' . escapeshellarg(__DIR__ . '/exit-1.php');
 
         $project = new Project('foo/bar', $config, [
-            'clone'   => $exit0,
-            'install' => $exit0,
-            'script'  => $exit0,
+            'clone'    => $exit0,
+            'install'  => $exit0,
+            'autoload' => $exit0,
+            'script'   => $exit0,
         ]);
         @unlink($buffer);
         $directory = sys_get_temp_dir() . '/test-' . mt_rand(0, 99999);
@@ -252,9 +253,10 @@ class ProjectTest extends TestCase
         (new Directory($directory))->remove();
 
         $project = new Project('foo/bar', $config, [
-            'clone'   => $exit0,
-            'install' => $exit0,
-            'script'  => $exit1,
+            'clone'    => $exit0,
+            'install'  => $exit0,
+            'autoload' => $exit0,
+            'script'   => $exit1,
         ]);
         @unlink($buffer);
         $directory = sys_get_temp_dir() . '/test-' . mt_rand(0, 99999);
@@ -271,6 +273,30 @@ class ProjectTest extends TestCase
         @unlink($buffer);
 
         $this->assertSame('Test of foo/bar failed.', $message);
+
+        (new Directory($directory))->remove();
+
+        $project = new Project('foo/bar', $config, [
+            'clone'    => $exit0,
+            'install'  => $exit0,
+            'autoload' => $exit1,
+            'script'   => $exit0,
+        ]);
+        @unlink($buffer);
+        $directory = sys_get_temp_dir() . '/test-' . mt_rand(0, 99999);
+        mkdir($directory, 0777, true);
+        chdir($directory);
+        $tester->setWorkingDirectory($directory);
+        $message = null;
+
+        try {
+            $project->test();
+        } catch (MultiTesterException $exception) {
+            $message = $exception->getMessage();
+        }
+        @unlink($buffer);
+
+        $this->assertSame('Building autoloader of foo/bar failed.', $message);
 
         (new Directory($directory))->remove();
     }
@@ -601,5 +627,58 @@ class ProjectTest extends TestCase
         ], $settings['script']);
 
         @unlink($buffer);
+    }
+
+    /**
+     * @throws \ReflectionException
+     * @throws MultiTesterException
+     */
+    public function testRemoveReplacedPackages()
+    {
+        chdir(__DIR__ . '/project2');
+
+        $tester = new MultiTester();
+        $buffer = sys_get_temp_dir() . '/test-' . mt_rand(0, 99999);
+        $tester->setProcStreams([
+            ['file', 'php://stdin', 'r'],
+            ['file', $buffer, 'a'],
+            ['file', $buffer, 'a'],
+        ]);
+        $config = new Config($tester, [__DIR__ . '/../bin/multi-tester']);
+        $project = new Project('pug-php/pug', $config, []);
+
+        chdir(sys_get_temp_dir());
+        $dir = 'multi-tester-' . mt_rand(0, 999999);
+        $projectDir = 'vendor/my-org/other-project';
+        mkdir("$dir/$projectDir", 0777, true);
+        chdir($dir);
+
+        $this->assertTrue(is_dir($projectDir));
+
+        $removeReplacedPackages = new ReflectionMethod($project, 'removeReplacedPackages');
+        $removeReplacedPackages->setAccessible(true);
+        $removeReplacedPackages->invoke($project);
+
+        $this->assertFalse(is_dir($projectDir));
+
+        chdir(sys_get_temp_dir());
+        (new Directory($dir))->remove();
+
+        chdir(__DIR__ . '/project');
+
+        $tester = new MultiTester();
+        $buffer = sys_get_temp_dir() . '/test-' . mt_rand(0, 99999);
+        $tester->setProcStreams([
+            ['file', 'php://stdin', 'r'],
+            ['file', $buffer, 'a'],
+            ['file', $buffer, 'a'],
+        ]);
+        $config = new Config($tester, [__DIR__ . '/../bin/multi-tester']);
+        $project = new Project('pug-php/pug', $config, []);
+
+        $removeReplacedPackages = new ReflectionMethod($project, 'removeReplacedPackages');
+        $removeReplacedPackages->setAccessible(true);
+
+        $this->assertNull($removeReplacedPackages->invoke($project));
     }
 }
